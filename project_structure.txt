@@ -1,0 +1,64 @@
+MT5智能交易系统项目结构
+
+MT5_Trading_System/
+│
+├── config/                      # 配置模块
+│   ├── __init__.py             # 使config成为Python包
+│   ├── settings.py             # 系统配置（账户信息、交易参数等）
+│   └── logging_config.py       # 日志系统配置
+│
+├── strategies/                  # 策略模块
+│   ├── __init__.py             
+│   ├── base.py                 # BaseStrategy抽象基类
+│   ├── ma_strategy.py          # MAStrategy双均线策略实现
+│   ├── dkll_strategy.py        # DKLLStrategy策略实现
+│   ├── rsi_strategy.py         # RSIStrategy策略实现
+│   └── manager.py              # StrategyManager策略管理器
+│
+├── trading/                     # 交易功能模块
+│   ├── __init__.py             
+│   ├── mt5_connector.py        # MT5连接和基础功能
+│   ├── order_manager.py        # 订单管理（下单、平仓）
+│   └── position_manager.py     # 持仓管理和信号检查
+│
+├── analysis/                    # 分析模块
+│   ├── __init__.py             
+│   ├── performance_tracker.py  # TradingPerformanceTracker交易统计
+│   └── optimizer.py            # ParameterOptimizer参数优化器
+│
+├── monitoring/                  # 监控模块
+│   ├── __init__.py             
+│   ├── monitor.py              # 各种监控模式实现
+│   └── auto_trader.py          # 全自动化交易实现
+│
+├── ui/                          # 用户界面模块
+│   ├── __init__.py             
+│   ├── menu.py                 # 主菜单和用户交互
+│   └── diagnosis.py            # 系统诊断功能
+│
+├── trading_logs/                # 日志文件目录（程序自动创建）
+│   ├── trading_YYYYMMDD.log   # 主日志文件
+│   ├── trades_YYYYMMDD.log    # 交易记录日志
+│   └── *.txt                   # 各种报告文件
+│
+├── main.py                      # 程序主入口
+├── requirements.txt             # Python依赖包列表
+├── README.md                    # 项目说明文档
+└── project_structure.txt        # 本文件
+
+每个__init__.py文件内容（创建空文件即可）：
+# 这使得目录成为Python包，允许模块导入
+
+主要类和功能：
+1. BaseStrategy - 所有策略的抽象基类
+2. StrategyManager - 管理和切换不同策略
+3. TradingPerformanceTracker - 跟踪交易表现和生成报告
+4. ParameterOptimizer - 优化策略参数
+5. 各种监控函数 - 实现不同的监控模式
+6. main_menu - 提供用户交互界面
+
+使用方法：
+1. 确保所有文件按照上述结构组织
+2. 在每个包目录中创建空的__init__.py文件
+3. 修改config/settings.py中的账户信息
+4. 运行: python main.py

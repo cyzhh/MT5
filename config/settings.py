@@ -1,0 +1,35 @@
+"""
+MT5交易系统配置文件
+"""
+
+# MT5账户配置
+MT5_ACCOUNT = 60011971
+MT5_PASSWORD = "Demo123456789."
+MT5_SERVER = "TradeMaxGlobal-Demo"
+
+# 交易品种
+SYMBOL = "BTCUSD"
+
+# 默认交易参数
+DEFAULT_VOLUME = 0.01
+DEFAULT_MAGIC = 123456
+DEFAULT_DEVIATION = 20
+
+# 监控参数
+SIGNAL_CHECK_INTERVAL = 10  # 信号检查间隔（秒）
+PRICE_UPDATE_INTERVAL = 1   # 价格更新间隔（秒）
+STATUS_LOG_INTERVAL = 300   # 状态日志间隔（秒）
+PERFORMANCE_UPDATE_INTERVAL = 30  # 统计更新间隔（秒）
+
+# 自动化交易参数
+DEFAULT_OPTIMIZATION_INTERVAL = 24  # 默认优化间隔（小时）
+DEFAULT_OPTIMIZATION_LOOKBACK = 168  # 默认优化回望期（小时）
+DEFAULT_TEST_COMBINATIONS = 30  # 默认测试组合数
+
+# 连接重试参数
+MAX_PRICE_RETRIES = 3
+CONNECTION_ERROR_THRESHOLD = 5
+RECONNECT_WAIT_TIME = 30  # 秒
+
+# 文件路径
+LOG_DIR = "trading_logs"

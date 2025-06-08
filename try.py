@@ -1410,8 +1410,104 @@ def setup_automated_trading():
         logger.info("用户取消全自动化交易")
         print("已取消全自动化交易")
 
-# 创建全局参数优化器
-parameter_optimizer = ParameterOptimizer()
+def manual_parameter_optimization():
+    """手动参数优化菜单"""
+    logger.info("用户进入手动参数优化")
+    
+    current_strategy = strategy_manager.get_current_strategy()
+    print(f"\n🔧 参数优化")
+    print(f"当前策略: {current_strategy.get_name()}")
+    print(f"当前参数: {current_strategy.get_params()}")
+    
+    # 设置优化参数
+    print(f"\n⚙️ 优化设置:")
+    lookback_hours = input("历史数据回望期（小时，默认168=7天）: ").strip()
+    try:
+        lookback_hours = int(lookback_hours) if lookback_hours else 168
+        if lookback_hours < 24:
+            print("⚠️ 回望期至少24小时，已设置为24小时")
+            lookback_hours = 24
+        elif lookback_hours > 720:  # 30天
+            print("⚠️ 回望期最多720小时，已设置为720小时")  
+            lookback_hours = 720
+    except ValueError:
+        print("⚠️ 输入无效，使用默认168小时")
+        lookback_hours = 168
+    
+    test_combinations = input("测试参数组合数量（默认30）: ").strip()
+    try:
+        test_combinations = int(test_combinations) if test_combinations else 30
+        if test_combinations < 10:
+            print("⚠️ 至少测试10个组合，已设置为10")
+            test_combinations = 10
+        elif test_combinations > 100:
+            print("⚠️ 最多测试100个组合，已设置为100")
+            test_combinations = 100
+    except ValueError:
+        print("⚠️ 输入无效，使用默认30")
+        test_combinations = 30
+    
+    print(f"\n📊 优化配置:")
+    print(f"  策略: {current_strategy.get_name()}")
+    print(f"  回望期: {lookback_hours} 小时 ({lookback_hours//24} 天)")
+    print(f"  测试组合: {test_combinations} 个")
+    print(f"  品种: {symbol}")
+    
+    confirm = input(f"\n确认开始参数优化? (y/N): ").strip().lower()
+    if confirm == 'y':
+        logger.info(f"用户确认手动参数优化 - 回望期: {lookback_hours}h, 测试组合: {test_combinations}")
+        
+        # 记录当前参数
+        original_params = current_strategy.get_params().copy()
+        print(f"\n🔄 开始优化，这可能需要几分钟...")
+        
+        try:
+            # 执行参数优化
+            optimized_params = parameter_optimizer.optimize_strategy(
+                strategy_name=current_strategy.get_name(),
+                symbol=symbol,
+                optimization_hours=lookback_hours,
+                test_combinations=test_combinations
+            )
+            
+            if optimized_params:
+                print(f"\n✅ 参数优化完成！")
+                print(f"原始参数: {original_params}")
+                print(f"优化参数: {optimized_params}")
+                
+                # 显示参数对比
+                print(f"\n📊 参数变化:")
+                for param_name in original_params.keys():
+                    old_val = original_params[param_name]
+                    new_val = optimized_params[param_name]
+                    if new_val > old_val:
+                        change = "📈 增大"
+                    elif new_val < old_val:
+                        change = "📉 减小"
+                    else:
+                        change = "➡️ 不变"
+                    print(f"  {param_name}: {old_val} → {new_val} {change}")
+                
+                # 询问是否应用新参数
+                apply = input(f"\n是否应用优化后的参数? (y/N): ").strip().lower()
+                if apply == 'y':
+                    current_strategy.set_params(optimized_params)
+                    print(f"✅ 新参数已应用！")
+                    logger.info(f"手动参数优化完成并应用: {optimized_params}")
+                    trade_logger.info(f"手动参数优化 | 策略: {current_strategy.get_name()} | 原参数: {original_params} | 新参数: {optimized_params}")
+                else:
+                    print(f"参数未应用，保持原始设置")
+                    logger.info("用户选择不应用优化参数")
+            else:
+                print(f"❌ 参数优化失败，保持原始参数")
+                logger.warning("参数优化失败")
+                
+        except Exception as e:
+            logger.error(f"参数优化过程中发生错误: {e}")
+            print(f"❌ 优化过程出错: {e}")
+    else:
+        logger.info("用户取消手动参数优化")
+        print("已取消参数优化")
 
 # ===== 日志配置 =====
 def setup_logging():
@@ -2331,17 +2427,19 @@ def main_with_options():
     print("1. 运行高速监控 (每秒更新，每10秒检查信号)")
     print("2. 运行限时高速监控 (指定时间)")
     print("3. 运行经典监控 (每5秒更新)")
-    print("4. 检查当前信号状态")
-    print("5. 手动下单测试")
-    print("6. 查看当前持仓")
-    print("7. 策略选择和配置")  
-    print("8. 查看策略信息")   
-    print("9. 系统诊断")        
-    print("10. 查看交易统计")   # 新增选项
+    print("4. 🤖 全自动化交易 (含定时参数优化)")  # 修复后的选项
+    print("5. 检查当前信号状态")
+    print("6. 手动下单测试")
+    print("7. 查看当前持仓")
+    print("8. 策略选择和配置")  
+    print("9. 查看策略信息")   
+    print("10. 系统诊断")        
+    print("11. 查看交易统计")
+    print("12. 🔧 手动参数优化")  # 修复后的选项
     print("0. 退出")
     
     try:
-        choice = input("\n请选择操作 (0-10): ").strip()
+        choice = input("\n请选择操作 (0-12): ").strip()
         logger.info(f"用户选择: {choice}")
         
         if choice == "1":
@@ -2354,19 +2452,25 @@ def main_with_options():
         elif choice == "3":
             run_classic_monitoring()
         elif choice == "4":
-            check_current_signal()
+            # 全自动化交易
+            setup_automated_trading()
         elif choice == "5":
-            test_manual_order()
+            check_current_signal()
         elif choice == "6":
-            show_positions()
+            test_manual_order()
         elif choice == "7":
-            strategy_selection_menu()
+            show_positions()
         elif choice == "8":
-            print("\n" + strategy_manager.get_strategy_info())
+            strategy_selection_menu()
         elif choice == "9":
-            diagnose_system()
+            print("\n" + strategy_manager.get_strategy_info())
         elif choice == "10":
+            diagnose_system()
+        elif choice == "11":
             view_trading_statistics()
+        elif choice == "12":
+            # 手动参数优化
+            manual_parameter_optimization()
         elif choice == "0":
             logger.info("用户选择退出程序")
             return
@@ -3010,7 +3114,6 @@ if __name__ == "__main__":
         df['time'] = pd.to_datetime(df['time'], unit='s')
         logger.info(f"成功获取{len(df)}根K线数据")
         
-        # 显示当前策略信息
         # 创建全局策略管理器
         strategy_manager = StrategyManager()
 
@@ -3019,6 +3122,8 @@ if __name__ == "__main__":
 
         # 创建全局参数优化器
         parameter_optimizer = ParameterOptimizer()
+        
+        # 显示当前策略信息
         current_strategy = strategy_manager.get_current_strategy()
         logger.info(f"当前策略: {current_strategy.get_name()}")
         logger.info(f"策略描述: {current_strategy.get_description()}")
