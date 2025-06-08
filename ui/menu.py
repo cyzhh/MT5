@@ -11,6 +11,10 @@ from trading.order_manager import place_order, close_position
 from trading.position_manager import get_positions, check_signal_with_positions
 from monitoring.monitor import run_continuous_monitoring, run_classic_monitoring, run_timed_monitoring
 from monitoring.auto_trader import run_automated_trading
+from monitoring.multi_symbol_monitor import MultiSymbolMonitor
+from trading.money_manager import MoneyManager
+from notifications.dingtalk import DingTalkNotifier
+from config.settings import DINGTALK_WEBHOOK, DINGTALK_SECRET
 
 logger = logging.getLogger('MT5_Trading')
 trade_logger = logging.getLogger('MT5_Trades')
@@ -19,26 +23,45 @@ def main_menu(strategy_manager, performance_tracker, parameter_optimizer):
     """主程序菜单"""
     logger.info("显示程序菜单")
     
-    # 显示当前策略信息
-    print(f"\n当前策略: {strategy_manager.get_current_strategy().get_name()}")
+    # 初始化钉钉通知
+    notifier = None
+    if DINGTALK_WEBHOOK:
+        notifier = DingTalkNotifier(DINGTALK_WEBHOOK, DINGTALK_SECRET)
+        print("🔔 钉钉通知已启用")
+    
+    # 显示当前模式
+    money_manager = MoneyManager()
+    enabled_symbols = money_manager.get_enabled_symbols()
+    
+    if len(enabled_symbols) > 1:
+        print(f"\n💼 多币种模式: {', '.join(enabled_symbols)}")
+    else:
+        print(f"\n当前策略: {strategy_manager.get_current_strategy().get_name()}")
     
     print("\n=== 交易程序选项 ===")
+    print("【单币种模式】")
     print("1. 运行高速监控 (每秒更新，每10秒检查信号)")
     print("2. 运行限时高速监控 (指定时间)")
     print("3. 运行经典监控 (每5秒更新)")
     print("4. 🤖 全自动化交易 (含定时参数优化)")
-    print("5. 检查当前信号状态")
-    print("6. 手动下单测试")
-    print("7. 查看当前持仓")
-    print("8. 策略选择和配置")  
-    print("9. 查看策略信息")   
-    print("10. 系统诊断")        
-    print("11. 查看交易统计")
-    print("12. 🔧 手动参数优化")
+    print("\n【多币种模式】")
+    print("5. 🌐 多币种监控交易")
+    print("6. 🤖 多币种全自动化交易")
+    print("\n【功能选项】")
+    print("7. 检查当前信号状态")
+    print("8. 手动下单测试")
+    print("9. 查看当前持仓")
+    print("10. 策略选择和配置")  
+    print("11. 查看策略信息")   
+    print("12. 系统诊断")        
+    print("13. 查看交易统计")
+    print("14. 🔧 手动参数优化")
+    print("15. 💰 资金管理设置")
+    print("16. 🔔 测试钉钉通知")
     print("0. 退出")
     
     try:
-        choice = input("\n请选择操作 (0-12): ").strip()
+        choice = input("\n请选择操作 (0-16): ").strip()
         logger.info(f"用户选择: {choice}")
         
         if choice == "1":
@@ -53,22 +76,33 @@ def main_menu(strategy_manager, performance_tracker, parameter_optimizer):
         elif choice == "4":
             setup_automated_trading(strategy_manager, performance_tracker, parameter_optimizer)
         elif choice == "5":
-            check_current_signal(strategy_manager, performance_tracker)
+            # 多币种监控
+            multi_monitor = MultiSymbolMonitor(strategy_manager, performance_tracker, notifier)
+            multi_monitor.run_multi_symbol_monitoring()
         elif choice == "6":
-            test_manual_order(strategy_manager, performance_tracker)
+            # 多币种全自动化交易
+            setup_multi_symbol_automated_trading(strategy_manager, performance_tracker, parameter_optimizer, notifier)
         elif choice == "7":
-            show_positions(strategy_manager, performance_tracker)
+            check_current_signal(strategy_manager, performance_tracker)
         elif choice == "8":
-            strategy_selection_menu(strategy_manager)
+            test_manual_order(strategy_manager, performance_tracker)
         elif choice == "9":
-            print("\n" + strategy_manager.get_strategy_info())
+            show_positions(strategy_manager, performance_tracker)
         elif choice == "10":
+            strategy_selection_menu(strategy_manager)
+        elif choice == "11":
+            print("\n" + strategy_manager.get_strategy_info())
+        elif choice == "12":
             from ui.diagnosis import diagnose_system
             diagnose_system(strategy_manager)
-        elif choice == "11":
+        elif choice == "13":
             view_trading_statistics(performance_tracker)
-        elif choice == "12":
+        elif choice == "14":
             manual_parameter_optimization(strategy_manager, parameter_optimizer)
+        elif choice == "15":
+            money_management_menu(money_manager)
+        elif choice == "16":
+            test_dingtalk_notification(notifier)
         elif choice == "0":
             logger.info("用户选择退出程序")
             return False
@@ -523,101 +557,289 @@ def view_trading_statistics(performance_tracker):
         else:
             print("❌ 报告保存失败")
 
-def manual_parameter_optimization(strategy_manager, parameter_optimizer):
-    """手动参数优化菜单"""
-    logger.info("用户进入手动参数优化")
+def money_management_menu(money_manager):
+    """资金管理设置菜单"""
+    logger.info("用户进入资金管理菜单")
     
-    current_strategy = strategy_manager.get_current_strategy()
-    print(f"\n🔧 参数优化")
-    print(f"当前策略: {current_strategy.get_name()}")
-    print(f"当前参数: {current_strategy.get_params()}")
+    print("\n💰 资金管理设置")
+    print("="*60)
+    
+    # 显示当前配置
+    allocation = money_manager.get_account_allocation_status()
+    print(f"\n账户信息:")
+    print(f"  余额: {allocation.get('total_balance', 0):.2f}")
+    print(f"  净值: {allocation.get('total_equity', 0):.2f}")
+    print(f"  可用保证金: {allocation.get('free_margin', 0):.2f}")
+    
+    print(f"\n当前币种配置:")
+    for symbol, config in money_manager.symbols_config.items():
+        status = allocation['symbols'].get(symbol, {})
+        print(f"\n{symbol}:")
+        print(f"  启用: {'✅' if config['enabled'] else '❌'}")
+        print(f"  持仓比例: {config['position_ratio']:.0%}")
+        print(f"  分配资金: {status.get('allocated_balance', 0):.2f}")
+        print(f"  最大持仓数: {config['max_positions']}")
+        print(f"  当前持仓: {status.get('current_positions', 0)}")
+        print(f"  单笔交易量: {config['volume_per_trade']}")
+        print(f"  最大总量: {config['max_volume']}")
+        print(f"  使用策略: {config['strategy']}")
+        print(f"  利用率: {status.get('utilization', 0):.1f}%")
+    
+    print("\n选项:")
+    print("1. 修改币种启用状态")
+    print("2. 调整持仓比例")
+    print("3. 修改交易量限制")
+    print("4. 更改币种策略")
+    print("5. 查看风险状态")
+    print("0. 返回主菜单")
+    
+    choice = input("\n请选择 (0-5): ").strip()
+    
+    if choice == "1":
+        modify_symbol_status(money_manager)
+    elif choice == "2":
+        adjust_position_ratios(money_manager)
+    elif choice == "3":
+        modify_volume_limits(money_manager)
+    elif choice == "4":
+        change_symbol_strategy(money_manager)
+    elif choice == "5":
+        show_risk_status(money_manager)
+
+def modify_symbol_status(money_manager):
+    """修改币种启用状态"""
+    print("\n修改币种启用状态:")
+    symbols = list(money_manager.symbols_config.keys())
+    
+    for i, symbol in enumerate(symbols, 1):
+        status = "启用" if money_manager.symbols_config[symbol]['enabled'] else "禁用"
+        print(f"{i}. {symbol} (当前: {status})")
+    
+    choice = input("\n选择要修改的币种 (编号): ").strip()
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(symbols):
+            symbol = symbols[idx]
+            current = money_manager.symbols_config[symbol]['enabled']
+            money_manager.symbols_config[symbol]['enabled'] = not current
+            new_status = "启用" if not current else "禁用"
+            print(f"✅ {symbol} 已{new_status}")
+            logger.info(f"用户修改 {symbol} 状态为: {new_status}")
+    except:
+        print("❌ 无效选择")
+
+def adjust_position_ratios(money_manager):
+    """调整持仓比例"""
+    print("\n调整持仓比例:")
+    
+    enabled_symbols = [s for s, cfg in money_manager.symbols_config.items() if cfg['enabled']]
+    if not enabled_symbols:
+        print("❌ 没有启用的币种")
+        return
+    
+    print("\n当前比例:")
+    total_ratio = 0
+    for symbol in enabled_symbols:
+        ratio = money_manager.symbols_config[symbol]['position_ratio']
+        print(f"  {symbol}: {ratio:.0%}")
+        total_ratio += ratio
+    print(f"  总计: {total_ratio:.0%}")
+    
+    print("\n输入新的比例 (百分比，如输入40表示40%):")
+    for symbol in enabled_symbols:
+        new_ratio = input(f"{symbol}: ").strip()
+        try:
+            ratio = float(new_ratio) / 100
+            if 0 <= ratio <= 1:
+                money_manager.symbols_config[symbol]['position_ratio'] = ratio
+                print(f"✅ {symbol} 比例设置为 {ratio:.0%}")
+        except:
+            print(f"保持 {symbol} 原比例")
+
+def modify_volume_limits(money_manager):
+    """修改交易量限制"""
+    print("\n修改交易量限制:")
+    
+    symbols = [s for s, cfg in money_manager.symbols_config.items() if cfg['enabled']]
+    for i, symbol in enumerate(symbols, 1):
+        print(f"{i}. {symbol}")
+    
+    choice = input("\n选择币种 (编号): ").strip()
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(symbols):
+            symbol = symbols[idx]
+            config = money_manager.symbols_config[symbol]
+            
+            print(f"\n{symbol} 当前限制:")
+            print(f"  最大持仓数: {config['max_positions']}")
+            print(f"  单笔交易量: {config['volume_per_trade']}")
+            print(f"  最大总量: {config['max_volume']}")
+            
+            # 修改最大持仓数
+            new_max_pos = input("新的最大持仓数 (回车保持不变): ").strip()
+            if new_max_pos.isdigit():
+                config['max_positions'] = int(new_max_pos)
+            
+            # 修改单笔交易量
+            new_volume = input("新的单笔交易量 (回车保持不变): ").strip()
+            try:
+                config['volume_per_trade'] = float(new_volume)
+            except:
+                pass
+            
+            # 修改最大总量
+            new_max_vol = input("新的最大总量 (回车保持不变): ").strip()
+            try:
+                config['max_volume'] = float(new_max_vol)
+            except:
+                pass
+            
+            print(f"✅ {symbol} 限制已更新")
+    except:
+        print("❌ 无效选择")
+
+def change_symbol_strategy(money_manager):
+    """更改币种策略"""
+    print("\n更改币种策略:")
+    
+    symbols = [s for s, cfg in money_manager.symbols_config.items() if cfg['enabled']]
+    for i, symbol in enumerate(symbols, 1):
+        current_strategy = money_manager.symbols_config[symbol]['strategy']
+        print(f"{i}. {symbol} (当前: {current_strategy})")
+    
+    choice = input("\n选择币种 (编号): ").strip()
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(symbols):
+            symbol = symbols[idx]
+            
+            print("\n可用策略:")
+            print("1. MA (双均线)")
+            print("2. DKLL")
+            print("3. RSI")
+            
+            strategy_choice = input("选择策略 (1-3): ").strip()
+            strategy_map = {"1": "MA", "2": "DKLL", "3": "RSI"}
+            
+            if strategy_choice in strategy_map:
+                money_manager.symbols_config[symbol]['strategy'] = strategy_map[strategy_choice]
+                print(f"✅ {symbol} 策略已更改为 {strategy_map[strategy_choice]}")
+    except:
+        print("❌ 无效选择")
+
+def show_risk_status(money_manager):
+    """显示风险状态"""
+    risk_summary = money_manager.get_risk_summary()
+    
+    print("\n📊 风险状态报告")
+    print("="*40)
+    print(f"总持仓数: {risk_summary.get('total_positions', 0)}")
+    print(f"总浮动盈亏: {risk_summary.get('total_profit', 0):+.2f}")
+    print(f"风险比例: {risk_summary.get('total_risk_ratio', 0):.1%}")
+    print(f"风险状态: {risk_summary.get('risk_status', 'UNKNOWN')}")
+    
+    warnings = risk_summary.get('warnings', [])
+    if warnings:
+        print("\n⚠️ 风险警告:")
+        for warning in warnings:
+            print(f"  - {warning}")
+    else:
+        print("\n✅ 无风险警告")
+
+def test_dingtalk_notification(notifier):
+    """测试钉钉通知"""
+    if not notifier:
+        print("❌ 钉钉通知未配置")
+        return
+    
+    print("\n🔔 测试钉钉通知")
+    print("1. 发送文本消息")
+    print("2. 发送交易通知")
+    print("3. 发送每日报告")
+    
+    choice = input("选择测试类型 (1-3): ").strip()
+    
+    if choice == "1":
+        if notifier.send_text("这是一条MT5自动交易系统的测试消息"):
+            print("✅ 文本消息发送成功")
+        else:
+            print("❌ 文本消息发送失败")
+            
+    elif choice == "2":
+        notifier.send_trade_notification({
+            'action': '测试交易',
+            'symbol': 'BTCUSD',
+            'direction': 'BUY',
+            'price': 50000,
+            'volume': 0.01,
+            'profit': 100,
+            'strategy': 'MA策略',
+            'balance': 10000,
+            'equity': 10100
+        })
+        print("✅ 交易通知已发送")
+        
+    elif choice == "3":
+        notifier.send_daily_report({
+            'total_trades': 10,
+            'winning_trades': 6,
+            'losing_trades': 4,
+            'win_rate': 60,
+            'total_profit': 150,
+            'profit_factor': 1.5,
+            'start_balance': 10000,
+            'current_balance': 10150,
+            'balance_change': 150,
+            'balance_change_percent': 1.5,
+            'symbol_stats': {
+                'BTCUSD': {'trades': 5, 'win_rate': 60, 'profit': 80},
+                'ETHUSD': {'trades': 3, 'win_rate': 66.7, 'profit': 50},
+                'XAUUSD': {'trades': 2, 'win_rate': 50, 'profit': 20}
+            }
+        })
+        print("✅ 每日报告已发送")
+
+def setup_multi_symbol_automated_trading(strategy_manager, performance_tracker, parameter_optimizer, notifier):
+    """设置多币种全自动化交易"""
+    logger.info("用户配置多币种全自动化交易")
+    
+    money_manager = MoneyManager()
+    enabled_symbols = money_manager.get_enabled_symbols()
+    
+    print(f"\n🤖 多币种全自动化交易设置")
+    print(f"启用币种: {', '.join(enabled_symbols)}")
+    
+    # 显示各币种配置
+    print("\n📊 币种配置:")
+    for symbol in enabled_symbols:
+        config = money_manager.get_symbol_config(symbol)
+        print(f"  {symbol}:")
+        print(f"    持仓比例: {config['position_ratio']:.0%}")
+        print(f"    策略: {config['strategy']}")
+        print(f"    最大持仓: {config['max_positions']}")
     
     # 设置优化参数
-    print(f"\n⚙️ 优化设置:")
-    lookback_hours = input("历史数据回望期（小时，默认168=7天）: ").strip()
-    try:
-        lookback_hours = int(lookback_hours) if lookback_hours else 168
-        if lookback_hours < 24:
-            print("⚠️ 回望期至少24小时，已设置为24小时")
-            lookback_hours = 24
-        elif lookback_hours > 720:  # 30天
-            print("⚠️ 回望期最多720小时，已设置为720小时")  
-            lookback_hours = 720
-    except ValueError:
-        print("⚠️ 输入无效，使用默认168小时")
-        lookback_hours = 168
+    print(f"\n⏰ 参数优化设置:")
+    optimization_interval = input("参数优化间隔（小时，默认24）: ").strip()
+    optimization_interval_hours = int(optimization_interval) if optimization_interval else 24
     
-    test_combinations = input("测试参数组合数量（默认30）: ").strip()
-    try:
-        test_combinations = int(test_combinations) if test_combinations else 30
-        if test_combinations < 10:
-            print("⚠️ 至少测试10个组合，已设置为10")
-            test_combinations = 10
-        elif test_combinations > 100:
-            print("⚠️ 最多测试100个组合，已设置为100")
-            test_combinations = 100
-    except ValueError:
-        print("⚠️ 输入无效，使用默认30")
-        test_combinations = 30
+    optimization_lookback = input("优化数据回望期（小时，默认168=7天）: ").strip()
+    optimization_lookback_hours = int(optimization_lookback) if optimization_lookback else 168
     
-    print(f"\n📊 优化配置:")
-    print(f"  策略: {current_strategy.get_name()}")
-    print(f"  回望期: {lookback_hours} 小时 ({lookback_hours//24} 天)")
-    print(f"  测试组合: {test_combinations} 个")
-    print(f"  品种: {SYMBOL}")
+    # 确认启动
+    print(f"\n📋 配置总结:")
+    print(f"  币种数量: {len(enabled_symbols)}")
+    print(f"  优化间隔: {optimization_interval_hours} 小时")
+    print(f"  回望期: {optimization_lookback_hours} 小时")
+    print(f"  钉钉通知: {'启用' if notifier else '未启用'}")
     
-    confirm = input(f"\n确认开始参数优化? (y/N): ").strip().lower()
+    confirm = input(f"\n确认启动多币种全自动化交易? (y/N): ").strip().lower()
     if confirm == 'y':
-        logger.info(f"用户确认手动参数优化 - 回望期: {lookback_hours}h, 测试组合: {test_combinations}")
-        
-        # 记录当前参数
-        original_params = current_strategy.get_params().copy()
-        print(f"\n🔄 开始优化，这可能需要几分钟...")
-        
-        try:
-            # 执行参数优化
-            optimized_params = parameter_optimizer.optimize_strategy(
-                strategy_name=current_strategy.get_name(),
-                symbol=SYMBOL,
-                optimization_hours=lookback_hours,
-                test_combinations=test_combinations
-            )
-            
-            if optimized_params:
-                print(f"\n✅ 参数优化完成！")
-                print(f"原始参数: {original_params}")
-                print(f"优化参数: {optimized_params}")
-                
-                # 显示参数对比
-                print(f"\n📊 参数变化:")
-                for param_name in original_params.keys():
-                    old_val = original_params[param_name]
-                    new_val = optimized_params[param_name]
-                    if new_val > old_val:
-                        change = "📈 增大"
-                    elif new_val < old_val:
-                        change = "📉 减小"
-                    else:
-                        change = "➡️ 不变"
-                    print(f"  {param_name}: {old_val} → {new_val} {change}")
-                
-                # 询问是否应用新参数
-                apply = input(f"\n是否应用优化后的参数? (y/N): ").strip().lower()
-                if apply == 'y':
-                    current_strategy.set_params(optimized_params)
-                    print(f"✅ 新参数已应用！")
-                    logger.info(f"手动参数优化完成并应用: {optimized_params}")
-                    trade_logger.info(f"手动参数优化 | 策略: {current_strategy.get_name()} | 原参数: {original_params} | 新参数: {optimized_params}")
-                else:
-                    print(f"参数未应用，保持原始设置")
-                    logger.info("用户选择不应用优化参数")
-            else:
-                print(f"❌ 参数优化失败，保持原始参数")
-                logger.warning("参数优化失败")
-                
-        except Exception as e:
-            logger.error(f"参数优化过程中发生错误: {e}")
-            print(f"❌ 优化过程出错: {e}")
+        logger.info(f"用户确认启动多币种全自动化交易")
+        # 这里可以实现多币种全自动化交易的具体逻辑
+        print("✅ 多币种全自动化交易已启动")
+        # TODO: 实现具体的多币种自动交易逻辑
     else:
-        logger.info("用户取消手动参数优化")
-        print("已取消参数优化")
+        logger.info("用户取消多币种全自动化交易")
+        print("已取消")

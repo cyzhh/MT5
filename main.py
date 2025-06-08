@@ -120,19 +120,20 @@ def main():
         
         # 显示交易会话开始信息
         print(f"\n🚀 MT5智能交易系统启动")
-        print(f"版本: v2.0 (包含全自动化交易)")
+        print(f"版本: v2.1 (支持多币种交易和钉钉通知)")
         print(f"时间: {performance_tracker.session_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"初始余额: {performance_tracker.session_start_balance:.2f}")
-        print(f"交易品种: {SYMBOL}")
+        print(f"默认品种: {SYMBOL}")
         print(f"当前策略: {current_strategy.get_name()}")
         print(f"策略参数: {current_strategy.get_params()}")
         
         print(f"\n🔧 新功能:")
-        print(f"  ✅ 全自动化交易 (选项4)")
+        print(f"  ✅ 多币种交易支持")
+        print(f"  ✅ 钉钉实时通知")
+        print(f"  ✅ 智能资金管理")
+        print(f"  ✅ 全自动化交易")
         print(f"  ✅ 定时参数优化")
-        print(f"  ✅ 手动参数优化 (选项12)")
         print(f"  ✅ DKLL策略无止盈止损")
-        print(f"  ✅ 完整的交易统计")
         
         if current_strategy.get_name() == "DKLL策略":
             print(f"\n🔔 当前策略特点:")
