@@ -3,9 +3,9 @@ MT5交易系统配置文件
 """
 
 # MT5账户配置
-MT5_ACCOUNT = 60011971
-MT5_PASSWORD = "Demo123456789."
-MT5_SERVER = "TradeMaxGlobal-Demo"
+MT5_ACCOUNT = 
+MT5_PASSWORD = 
+MT5_SERVER = 
 
 # 钉钉机器人配置
 DINGTALK_WEBHOOK = ""  # 钉钉机器人webhook地址
